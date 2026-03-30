@@ -295,16 +295,19 @@ let lastPullHash = '';
 
 function doorKey(n, s) { return `${n}|${s}`; }
 
+const FB_URL = 'https://d2d-tracker-6e596-default-rtdb.firebaseio.com/state.json';
+
 async function pullState() {
   try {
-    const r = await window.storage.get('attd2d_v4_philo_combined', true);
-    if (r && r.value) {
-      const hash = r.value.slice(0,40);
-      if (hash === lastPullHash) { setSyncStatus('live'); return; }
-      lastPullHash = hash;
-      state = JSON.parse(r.value.slice(40));
-      refreshDoors();
-      updateStats();
+    const r = await fetch(FB_URL);
+    if (r.ok) {
+      const data = await r.json();
+      if (data && data.hash && data.hash !== lastPullHash) {
+        lastPullHash = data.hash;
+        state = data.state || {};
+        refreshDoors();
+        updateStats();
+      }
     }
     setSyncStatus('live');
   } catch(e) { setSyncStatus('error'); }
@@ -313,8 +316,12 @@ async function pullState() {
 async function pushState() {
   setSyncStatus('syncing');
   try {
-    const hash = String(Date.now()).padStart(40,'0').slice(-40);
-    await window.storage.set('attd2d_v4_philo_combined', hash + JSON.stringify(state), true);
+    const hash = String(Date.now());
+    await fetch(FB_URL, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({hash, state})
+    });
     lastPullHash = hash;
     setSyncStatus('live');
   } catch(e) { setSyncStatus('error'); }
