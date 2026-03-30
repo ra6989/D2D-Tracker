@@ -1612,7 +1612,7 @@ let codeExpiry   = 0;
 let timerInterval = null;
 
 // Init EmailJS
-// EmailJS initialized via onload
+// EmailJS uses REST API directly
 
 function generate6DigitCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -1622,25 +1622,28 @@ async function sendVerificationCode(email) {
   currentCode = generate6DigitCode();
   codeExpiry  = Date.now() + CODE_EXPIRY_MS;
   const expireTime = new Date(codeExpiry).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-  // Wait for EmailJS to load if not ready
-  let retries = 0;
-  while(typeof emailjs === 'undefined' && retries < 20) {
-    await new Promise(r => setTimeout(r, 200));
-    retries++;
-  }
-  if(typeof emailjs === 'undefined') {
-    console.error('EmailJS failed to load');
-    return false;
-  }
+  // Use EmailJS REST API directly — no script dependency
   try {
-    await emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
-      email:    email,
-      passcode: currentCode,
-      time:     expireTime,
+    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        service_id:  EMAILJS_SERVICE,
+        template_id: EMAILJS_TEMPLATE,
+        user_id:     EMAILJS_KEY,
+        template_params: {
+          email:    email,
+          passcode: currentCode,
+          time:     expireTime,
+        }
+      })
     });
-    return true;
+    if (res.ok) return true;
+    const err = await res.text();
+    console.error('EmailJS API error:', err);
+    return false;
   } catch(e) {
-    console.error('EmailJS error:', e);
+    console.error('EmailJS fetch error:', e);
     return false;
   }
 }
