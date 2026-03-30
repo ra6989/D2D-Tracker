@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>D2D Field Tracker — AT&T Fiber</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0a0f;--surface:#13131a;--card:#1a1a24;--card2:#1e1e2a;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.13);
+  --text:#f0f0f5;--muted:#888899;--dim:#44445a;
+  --green:#22c97a;--green-dim:rgba(34,201,122,0.13);
+  --amber:#f5a623;--amber-dim:rgba(245,166,35,0.13);
+  --blue:#4da6ff;--blue-dim:rgba(77,166,255,0.13);
+  --purple:#b794f4;--purple-dim:rgba(183,148,244,0.13);
+  --red:#ff6b6b;--red-dim:rgba(255,107,107,0.13);
+  --teal:#2dd4bf;--teal-dim:rgba(45,212,191,0.13);
+  --orange:#fb923c;--orange-dim:rgba(251,146,60,0.13);
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;font-size:14px;}
+
+.hdr{background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:200;}
+.hdr-top{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 8px;}
+.hdr-title{font-size:17px;font-weight:600;}
+.hdr-sub{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:1px;}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block;margin-right:5px;transition:background .3s;}
+.sync-dot.live{background:var(--green);box-shadow:0 0 6px var(--green);}
+.sync-dot.syncing{background:var(--amber);}
+.sync-label{font-size:11px;color:var(--muted);}
+
+/* Territory tabs */
+.terr-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 10px 10px;}
+.terr-tab{padding:9px 12px;border-radius:9px;border:1px solid var(--border2);background:var(--card);color:var(--muted);font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer;text-align:center;transition:all .15s;}
+.terr-tab.active{border-color:var(--blue);background:var(--blue-dim);color:var(--blue);}
+
+.stats-bar{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;padding:0 10px 10px;}
+.stat{background:var(--card);border-radius:8px;padding:6px 8px;text-align:center;border:1px solid var(--border);}
+.stat-n{font-family:var(--mono);font-size:16px;font-weight:500;line-height:1;}
+.stat-l{font-size:9px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.06em;}
+.n-sold{color:var(--green);}.n-follow{color:var(--amber);}.n-no{color:var(--dim);}
+
+.name-bar{display:flex;gap:6px;padding:0 10px 10px;}
+.name-btn{flex:1;padding:8px;border-radius:8px;border:1px solid var(--border2);background:var(--card);color:var(--muted);font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;text-align:center;}
+.name-btn.active{border-color:var(--blue);background:var(--blue-dim);color:var(--blue);}
+
+.legend-bar{display:flex;gap:10px;padding:0 10px 8px;overflow-x:auto;scrollbar-width:none;}
+.legend-bar::-webkit-scrollbar{display:none;}
+.leg{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted);white-space:nowrap;}
+.leg-dot{width:7px;height:7px;border-radius:50%;}
+
+.content{padding:8px 10px 40px;}
+.territory-section{display:none;}.territory-section.active{display:block;}
+
+.zone-wrap{margin-bottom:10px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:var(--card);}
+.zone-hdr{display:flex;align-items:center;padding:12px 14px;cursor:pointer;gap:10px;}
+.zone-ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:500;flex-shrink:0;}
+.ico-a,.ico-d{background:var(--green-dim);color:var(--green);border:1px solid rgba(34,201,122,.2);}
+.ico-b,.ico-e{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(245,166,35,.2);}
+.ico-c,.ico-f{background:rgba(136,153,170,.1);color:#8899aa;border:1px solid rgba(136,153,170,.2);}
+.zone-info{flex:1;}
+.zone-name{font-size:14px;font-weight:600;}
+.zone-meta{font-size:11px;color:var(--muted);margin-top:1px;}
+.zone-chev{font-size:10px;color:var(--dim);transition:transform .2s;}
+.zone-chev.open{transform:rotate(180deg);}
+.zone-body{display:none;border-top:1px solid var(--border);}
+.zone-body.open{display:block;}
+
+.street-section{border-bottom:1px solid var(--border);}
+.street-section:last-child{border-bottom:none;}
+.street-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;background:rgba(255,255,255,.02);}
+.street-name-label{font-size:13px;font-weight:600;color:var(--text);}
+.street-meta{font-size:11px;color:var(--muted);margin-top:1px;}
+.street-right{display:flex;align-items:center;gap:6px;}
+.street-count{font-family:var(--mono);font-size:11px;color:var(--muted);}
+.s-chev{font-size:9px;color:var(--dim);transition:transform .2s;}
+.s-chev.open{transform:rotate(180deg);}
+.street-doors{display:none;}.street-doors.open{display:block;}
+
+.door-row{display:flex;align-items:center;padding:9px 14px;border-top:1px solid rgba(255,255,255,.04);gap:8px;transition:background .15s;}
+.door-row:hover{background:rgba(255,255,255,.02);}
+.door-addr{flex:0 0 auto;}
+.door-num{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--text);}
+.door-tags{display:flex;gap:3px;margin-top:2px;flex-wrap:wrap;}
+.tag{font-size:9px;font-weight:500;padding:1px 5px;border-radius:4px;}
+.tag-wrls{background:var(--green-dim);color:var(--green);border:1px solid rgba(34,201,122,.2);}
+.tag-cpb{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(77,166,255,.2);}
+.tag-both{background:var(--purple-dim);color:var(--purple);border:1px solid rgba(183,148,244,.2);}
+.door-mid{flex:1;min-width:0;}
+.door-status-wrap{display:flex;align-items:center;gap:6px;}
+.door-select{width:100%;padding:6px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--card2);color:var(--text);font-family:var(--font);font-size:12px;appearance:none;-webkit-appearance:none;cursor:pointer;}
+.door-select:focus{outline:none;border-color:var(--blue);}
+.door-select.status-sold{border-color:var(--green);background:var(--green-dim);color:var(--green);}
+.door-select.status-follow{border-color:var(--amber);background:var(--amber-dim);color:var(--amber);}
+.door-select.status-comeback{border-color:var(--teal);background:var(--teal-dim);color:var(--teal);}
+.door-select.status-not-home,.door-select.status-no{border-color:var(--dim);color:var(--muted);}
+.door-select.status-not-interested{border-color:var(--red);background:var(--red-dim);color:var(--red);}
+.door-note-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;}
+.door-note-btn.has-note{border-color:var(--amber);color:var(--amber);background:var(--amber-dim);}
+.door-note-row{display:none;padding:0 14px 10px;}
+.door-note-row.open{display:flex;gap:6px;}
+.door-note-input{flex:1;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--card2);color:var(--text);font-family:var(--font);font-size:12px;resize:none;}
+.door-note-input:focus{outline:none;border-color:var(--amber);}
+.note-save-btn{padding:7px 12px;border-radius:7px;border:1px solid rgba(245,166,35,.3);background:var(--amber-dim);color:var(--amber);font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;}
+.rep-chip{font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;background:var(--blue-dim);color:var(--blue);border:1px solid rgba(77,166,255,.2);white-space:nowrap;margin-top:3px;display:inline-block;}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:flex-end;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface);border-radius:16px 16px 0 0;border-top:1px solid var(--border2);width:100%;padding:20px 16px 32px;}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:12px;}
+.modal-input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--border2);background:var(--card2);color:var(--text);font-family:var(--font);font-size:15px;margin-bottom:10px;}
+.modal-input:focus{outline:none;border-color:var(--blue);}
+.modal-btn{width:100%;padding:14px;border-radius:10px;border:none;background:var(--blue);color:#fff;font-family:var(--font);font-size:15px;font-weight:600;cursor:pointer;}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:10px 18px;font-size:13px;color:var(--text);z-index:999;transition:transform .3s;white-space:nowrap;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-top">
+    <div>
+      <div class="hdr-title">🚪 D2D Field Tracker</div>
+      <div class="hdr-sub">AT&T Fiber · Real-time shared</div>
+    </div>
+    <div style="text-align:right">
+      <div><span class="sync-dot" id="syncDot"></span><span class="sync-label" id="syncLabel">Connecting...</span></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;" id="repLabel">Tap to set name ↓</div>
+    </div>
+  </div>
+
+  <div class="terr-tabs">
+    <button class="terr-tab active" id="tab1" onclick="switchTerritory(1)">📍 Parmer Extended<br><span style="font-size:10px;opacity:.7">336 doors · 16 streets</span></button>
+    <button class="terr-tab" id="tab2" onclick="switchTerritory(2)">📍 Parmer 78729<br><span style="font-size:10px;opacity:.7">479 doors · 23 streets</span></button>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat"><div class="stat-n" id="statTotal">—</div><div class="stat-l">Doors</div></div>
+    <div class="stat"><div class="stat-n n-sold" id="statSold">0</div><div class="stat-l">Sold</div></div>
+    <div class="stat"><div class="stat-n n-follow" id="statFollow">0</div><div class="stat-l">Follow</div></div>
+    <div class="stat"><div class="stat-n n-no" id="statNo">0</div><div class="stat-l">No Ans</div></div>
+    <div class="stat"><div class="stat-n" style="color:var(--muted)" id="statWorked">0</div><div class="stat-l">Worked</div></div>
+  </div>
+
+  <div class="name-bar">
+    <button class="name-btn" id="nameBtn" onclick="showNameModal()">👤 Set Your Name</button>
+  </div>
+</div>
+
+<div class="legend-bar">
+  <div class="leg"><div class="leg-dot" style="background:var(--green)"></div>Wrls = 20% off</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--blue)"></div>CprBB = copper upgrade</div>
+  <div class="leg"><div class="leg-dot" style="background:var(--purple)"></div>Both = easiest close</div>
+</div>
+
+<div class="content">
+  <div class="territory-section active" id="territory1"></div>
+  <div class="territory-section" id="territory2"></div>
+</div>
+
+<div class="modal-bg" id="nameModal">
+  <div class="modal">
+    <div class="modal-title">Who are you?</div>
+    <input class="modal-input" id="nameModalInput" placeholder="Your name (e.g. Rudy)" maxlength="20">
+    <button class="modal-btn" onclick="saveName()">Let's go 🔥</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'attd2d_v4_philo_combined';
+const POLL_MS = 4000;
+
+// ── All door data ──────────────────────────────────────────────────────────
+const TERRITORY1 = {
+  name: 'Parmer Extended',
+  zones: {
+    A: { label: 'Zone A — 13400 Core', ico: 'ico-a', streets: ['ALBANIA WAY','ATHENS TRL','BOLIVIA DR','GENT DR','MOSCOW TRL','BALAMOS DR'] },
+    B: { label: 'Zone B — Peabody / Osborne', ico: 'ico-b', streets: ['PEABODY DR','OSBORNE DR','TAMAYO DR','TOSSA LN','ROSSELLO DR'] },
+    C: { label: 'Zone C — Trail Ends', ico: 'ico-c', streets: ['PORTLAND TRL','RIMINI TRL','VARCELLA TRL','EARP WAY','TOVAR DR'] },
+  }
+};
+
+const TERRITORY2 = {
+  name: 'Parmer 78729',
+  zones: {
+    D: { label: 'Zone D — Luling / Tovar Core', ico: 'ico-d', streets: ['LULING LN','TOVAR DR 78729','SNOOK HOOK TRL','MONTAQUE DR','MONTAQUE CV'] },
+    E: { label: 'Zone E — Humphrey / Amasia', ico: 'ico-e', streets: ['HUMPHREY DR','AMASIA DR','AMASIA CV','BLACK CANYON DR','KINGMAN DR','TAMAYO DR 78729'] },
+    F: { label: 'Zone F — Darwin / Windrush / Small Streets', ico: 'ico-f', streets: ['DARWIN LN','DARWIN CV','WINDRUSH DR','VENDRELL DR','MARRERO DR','AVELLA DR','HENDRICKS DR','KIANA DR','OSBORNE DR 78729','JENNER LN','ITO CV','TILDER DR'] },
+  }
+};
+
+const DOORS_T1 = [
+  // ALBANIA WAY
+  {s:"ALBANIA WAY",n:"13400",t:"Wrls"},{s:"ALBANIA WAY",n:"13401",t:"Wrls"},{s:"ALBANIA WAY",n:"13404",t:"Wrls"},{s:"ALBANIA WAY",n:"13407",t:"CprBB"},{s:"ALBANIA WAY",n:"13408",t:""},{s:"ALBANIA WAY",n:"13411",t:""},{s:"ALBANIA WAY",n:"13412",t:""},{s:"ALBANIA WAY",n:"13415",t:""},{s:"ALBANIA WAY",n:"13416",t:""},{s:"ALBANIA WAY",n:"13419",t:"Wrls"},{s:"ALBANIA WAY",n:"13420",t:"Wrls"},{s:"ALBANIA WAY",n:"13423",t:""},{s:"ALBANIA WAY",n:"13424",t:"Wrls"},{s:"ALBANIA WAY",n:"13427",t:""},{s:"ALBANIA WAY",n:"13428",t:""},{s:"ALBANIA WAY",n:"13432",t:""},{s:"ALBANIA WAY",n:"13500",t:"CprBB"},{s:"ALBANIA WAY",n:"13501",t:"Wrls"},{s:"ALBANIA WAY",n:"13504",t:""},{s:"ALBANIA WAY",n:"13505",t:"Wrls"},{s:"ALBANIA WAY",n:"13508",t:""},{s:"ALBANIA WAY",n:"13509",t:""},{s:"ALBANIA WAY",n:"13512",t:""},{s:"ALBANIA WAY",n:"13513",t:""},{s:"ALBANIA WAY",n:"13516",t:""},{s:"ALBANIA WAY",n:"13517",t:""},{s:"ALBANIA WAY",n:"13520",t:""},{s:"ALBANIA WAY",n:"13521",t:""},{s:"ALBANIA WAY",n:"13524",t:""},{s:"ALBANIA WAY",n:"13525",t:""},{s:"ALBANIA WAY",n:"13528",t:""},{s:"ALBANIA WAY",n:"13529",t:"Wrls"},{s:"ALBANIA WAY",n:"13532",t:"Wrls"},{s:"ALBANIA WAY",n:"13533",t:""},{s:"ALBANIA WAY",n:"13536",t:"Wrls"},
+  // ATHENS TRL
+  {s:"ATHENS TRL",n:"13400",t:""},{s:"ATHENS TRL",n:"13401",t:"Wrls"},{s:"ATHENS TRL",n:"13404",t:"Wrls"},{s:"ATHENS TRL",n:"13408",t:""},{s:"ATHENS TRL",n:"13412",t:""},{s:"ATHENS TRL",n:"13415",t:"CprBB"},{s:"ATHENS TRL",n:"13416",t:""},{s:"ATHENS TRL",n:"13419",t:"Wrls"},{s:"ATHENS TRL",n:"13420",t:""},{s:"ATHENS TRL",n:"13423",t:""},{s:"ATHENS TRL",n:"13424",t:"Wrls"},{s:"ATHENS TRL",n:"13427",t:""},{s:"ATHENS TRL",n:"13428",t:"Both"},{s:"ATHENS TRL",n:"13431",t:"Wrls"},{s:"ATHENS TRL",n:"13432",t:""},{s:"ATHENS TRL",n:"13435",t:""},{s:"ATHENS TRL",n:"13436",t:""},{s:"ATHENS TRL",n:"13439",t:"Both"},{s:"ATHENS TRL",n:"13440",t:"Both"},{s:"ATHENS TRL",n:"13443",t:""},{s:"ATHENS TRL",n:"13444",t:""},{s:"ATHENS TRL",n:"13447",t:""},{s:"ATHENS TRL",n:"13448",t:""},{s:"ATHENS TRL",n:"13451",t:""},{s:"ATHENS TRL",n:"13452",t:""},{s:"ATHENS TRL",n:"13455",t:"Wrls"},{s:"ATHENS TRL",n:"13456",t:""},{s:"ATHENS TRL",n:"13459",t:""},{s:"ATHENS TRL",n:"13460",t:"Wrls"},{s:"ATHENS TRL",n:"13463",t:""},{s:"ATHENS TRL",n:"13464",t:""},{s:"ATHENS TRL",n:"13467",t:"Wrls"},{s:"ATHENS TRL",n:"13468",t:"Wrls"},
+  // BALAMOS DR
+  {s:"BALAMOS DR",n:"13400",t:""},{s:"BALAMOS DR",n:"13401",t:"Wrls"},{s:"BALAMOS DR",n:"13404",t:""},{s:"BALAMOS DR",n:"13405",t:"CprBB"},{s:"BALAMOS DR",n:"13408",t:"Wrls"},{s:"BALAMOS DR",n:"13409",t:""},{s:"BALAMOS DR",n:"13412",t:"Wrls"},{s:"BALAMOS DR",n:"13413",t:"Wrls"},{s:"BALAMOS DR",n:"13416",t:""},{s:"BALAMOS DR",n:"13417",t:"CprBB"},{s:"BALAMOS DR",n:"13420",t:""},{s:"BALAMOS DR",n:"13421",t:""},{s:"BALAMOS DR",n:"13424",t:""},{s:"BALAMOS DR",n:"13425",t:"Both"},
+  // BOLIVIA DR
+  {s:"BOLIVIA DR",n:"13400",t:"CprBB"},{s:"BOLIVIA DR",n:"13401",t:""},{s:"BOLIVIA DR",n:"13402",t:""},{s:"BOLIVIA DR",n:"13404",t:"Wrls"},{s:"BOLIVIA DR",n:"13405",t:""},{s:"BOLIVIA DR",n:"13408",t:""},{s:"BOLIVIA DR",n:"13409",t:""},{s:"BOLIVIA DR",n:"13412",t:""},{s:"BOLIVIA DR",n:"13413",t:"Wrls"},{s:"BOLIVIA DR",n:"13416",t:""},{s:"BOLIVIA DR",n:"13417",t:""},{s:"BOLIVIA DR",n:"13420",t:""},{s:"BOLIVIA DR",n:"13421",t:"CprBB"},{s:"BOLIVIA DR",n:"13424",t:"Wrls"},{s:"BOLIVIA DR",n:"13425",t:""},{s:"BOLIVIA DR",n:"13500",t:""},{s:"BOLIVIA DR",n:"13501",t:"Both"},{s:"BOLIVIA DR",n:"13504",t:""},{s:"BOLIVIA DR",n:"13505",t:""},{s:"BOLIVIA DR",n:"13508",t:""},{s:"BOLIVIA DR",n:"13509",t:""},{s:"BOLIVIA DR",n:"13512",t:""},{s:"BOLIVIA DR",n:"13513",t:""},{s:"BOLIVIA DR",n:"13516",t:""},{s:"BOLIVIA DR",n:"13517",t:""},{s:"BOLIVIA DR",n:"13520",t:"Wrls"},{s:"BOLIVIA DR",n:"13521",t:""},{s:"BOLIVIA DR",n:"13524",t:""},{s:"BOLIVIA DR",n:"13525",t:"CprBB"},{s:"BOLIVIA DR",n:"13528",t:""},{s:"BOLIVIA DR",n:"13529",t:""},{s:"BOLIVIA DR",n:"13532",t:"CprBB"},{s:"BOLIVIA DR",n:"13533",t:"Wrls"},
+  // EARP WAY
+  {s:"EARP WAY",n:"7700",t:""},{s:"EARP WAY",n:"7704",t:""},{s:"EARP WAY",n:"7708",t:"Wrls"},{s:"EARP WAY",n:"7712",t:""},{s:"EARP WAY",n:"7716",t:""},
+  // GENT DR
+  {s:"GENT DR",n:"13400",t:""},{s:"GENT DR",n:"13401",t:""},{s:"GENT DR",n:"13405",t:""},{s:"GENT DR",n:"13406",t:""},{s:"GENT DR",n:"13409",t:"Wrls"},{s:"GENT DR",n:"13410",t:""},{s:"GENT DR",n:"13413",t:""},{s:"GENT DR",n:"13414",t:""},{s:"GENT DR",n:"13417",t:"Both"},{s:"GENT DR",n:"13418",t:"CprBB"},{s:"GENT DR",n:"13421",t:""},{s:"GENT DR",n:"13422",t:"Wrls"},{s:"GENT DR",n:"13425",t:"CprBB"},{s:"GENT DR",n:"13426",t:"Both"},{s:"GENT DR",n:"13429",t:"Wrls"},{s:"GENT DR",n:"13433",t:"Wrls"},{s:"GENT DR",n:"13437",t:"Both"},{s:"GENT DR",n:"13438",t:""},{s:"GENT DR",n:"13441",t:""},{s:"GENT DR",n:"13442",t:"CprBB"},{s:"GENT DR",n:"13445",t:""},{s:"GENT DR",n:"13446",t:""},{s:"GENT DR",n:"13449",t:""},{s:"GENT DR",n:"13450",t:""},{s:"GENT DR",n:"13453",t:""},{s:"GENT DR",n:"13454",t:""},{s:"GENT DR",n:"13457",t:""},{s:"GENT DR",n:"13458",t:"CprBB"},{s:"GENT DR",n:"13461",t:""},{s:"GENT DR",n:"13462",t:""},{s:"GENT DR",n:"13465",t:""},{s:"GENT DR",n:"13466",t:""},{s:"GENT DR",n:"13469",t:""},{s:"GENT DR",n:"13470",t:""},
+  // MOSCOW TRL
+  {s:"MOSCOW TRL",n:"13400",t:""},{s:"MOSCOW TRL",n:"13401",t:"Both"},{s:"MOSCOW TRL",n:"13405",t:"CprBB"},{s:"MOSCOW TRL",n:"13406",t:"Both"},{s:"MOSCOW TRL",n:"13409",t:""},{s:"MOSCOW TRL",n:"13412",t:""},{s:"MOSCOW TRL",n:"13413",t:"Wrls"},{s:"MOSCOW TRL",n:"13417",t:""},{s:"MOSCOW TRL",n:"13418",t:"Wrls"},{s:"MOSCOW TRL",n:"13421",t:"Wrls"},{s:"MOSCOW TRL",n:"13422",t:""},{s:"MOSCOW TRL",n:"13424",t:""},{s:"MOSCOW TRL",n:"13425",t:""},{s:"MOSCOW TRL",n:"13428",t:""},{s:"MOSCOW TRL",n:"13429",t:""},{s:"MOSCOW TRL",n:"13432",t:""},{s:"MOSCOW TRL",n:"13433",t:""},{s:"MOSCOW TRL",n:"13436",t:"Wrls"},{s:"MOSCOW TRL",n:"13438",t:""},{s:"MOSCOW TRL",n:"13442",t:"Both"},{s:"MOSCOW TRL",n:"13446",t:""},{s:"MOSCOW TRL",n:"13447",t:"Wrls"},{s:"MOSCOW TRL",n:"13450",t:""},{s:"MOSCOW TRL",n:"13451",t:""},{s:"MOSCOW TRL",n:"13454",t:""},{s:"MOSCOW TRL",n:"13455",t:""},{s:"MOSCOW TRL",n:"13459",t:"CprBB"},
+  // OSBORNE DR (T1 - Extended)
+  {s:"OSBORNE DR",n:"7808",t:""},{s:"OSBORNE DR",n:"7812",t:"Wrls"},{s:"OSBORNE DR",n:"7900",t:""},{s:"OSBORNE DR",n:"7904",t:""},{s:"OSBORNE DR",n:"7910",t:""},{s:"OSBORNE DR",n:"7914",t:"Wrls"},{s:"OSBORNE DR",n:"7918",t:""},{s:"OSBORNE DR",n:"7922",t:""},{s:"OSBORNE DR",n:"8000",t:""},{s:"OSBORNE DR",n:"8004",t:""},{s:"OSBORNE DR",n:"8008",t:"Both"},{s:"OSBORNE DR",n:"8012",t:"Wrls"},{s:"OSBORNE DR",n:"8016",t:""},{s:"OSBORNE DR",n:"8020",t:"Both"},{s:"OSBORNE DR",n:"8100",t:""},{s:"OSBORNE DR",n:"8104",t:""},{s:"OSBORNE DR",n:"8108",t:""},{s:"OSBORNE DR",n:"8116",t:""},{s:"OSBORNE DR",n:"8120",t:""},{s:"OSBORNE DR",n:"8124",t:"Wrls"},{s:"OSBORNE DR",n:"8128",t:"CprBB"},{s:"OSBORNE DR",n:"8132",t:""},{s:"OSBORNE DR",n:"8136",t:""},{s:"OSBORNE DR",n:"8140",t:"Wrls"},
+  // PEABODY DR
+  {s:"PEABODY DR",n:"7400",t:"Both"},{s:"PEABODY DR",n:"7404",t:""},{s:"PEABODY DR",n:"7405",t:"Wrls"},{s:"PEABODY DR",n:"7408",t:""},{s:"PEABODY DR",n:"7409",t:""},{s:"PEABODY DR",n:"7412",t:""},{s:"PEABODY DR",n:"7413",t:""},{s:"PEABODY DR",n:"7416",t:"Wrls"},{s:"PEABODY DR",n:"7417",t:""},{s:"PEABODY DR",n:"7420",t:""},{s:"PEABODY DR",n:"7421",t:""},{s:"PEABODY DR",n:"7425",t:"Both"},{s:"PEABODY DR",n:"7433",t:""},{s:"PEABODY DR",n:"7435",t:""},{s:"PEABODY DR",n:"7441",t:""},{s:"PEABODY DR",n:"7445",t:""},{s:"PEABODY DR",n:"7449",t:""},{s:"PEABODY DR",n:"7453",t:"Wrls"},{s:"PEABODY DR",n:"7457",t:"CprBB"},{s:"PEABODY DR",n:"7501",t:""},{s:"PEABODY DR",n:"7509",t:"CprBB"},{s:"PEABODY DR",n:"7513",t:""},{s:"PEABODY DR",n:"7517",t:"Wrls"},{s:"PEABODY DR",n:"7521",t:""},{s:"PEABODY DR",n:"7525",t:"Wrls"},{s:"PEABODY DR",n:"7601",t:""},{s:"PEABODY DR",n:"7605",t:""},{s:"PEABODY DR",n:"7609",t:"Both"},{s:"PEABODY DR",n:"7613",t:"Wrls"},{s:"PEABODY DR",n:"7617",t:"Both"},{s:"PEABODY DR",n:"7621",t:""},{s:"PEABODY DR",n:"7701",t:""},{s:"PEABODY DR",n:"7705",t:"Wrls"},{s:"PEABODY DR",n:"7709",t:"CprBB"},{s:"PEABODY DR",n:"7713",t:""},{s:"PEABODY DR",n:"7717",t:""},
+  // PORTLAND TRL
+  {s:"PORTLAND TRL",n:"7700",t:""},{s:"PORTLAND TRL",n:"7704",t:"Wrls"},{s:"PORTLAND TRL",n:"7708",t:""},{s:"PORTLAND TRL",n:"7712",t:""},{s:"PORTLAND TRL",n:"7716",t:""},{s:"PORTLAND TRL",n:"7720",t:""},{s:"PORTLAND TRL",n:"7724",t:""},{s:"PORTLAND TRL",n:"7728",t:""},{s:"PORTLAND TRL",n:"7800",t:""},{s:"PORTLAND TRL",n:"7804",t:""},{s:"PORTLAND TRL",n:"7808",t:""},{s:"PORTLAND TRL",n:"7812",t:""},{s:"PORTLAND TRL",n:"7816",t:""},{s:"PORTLAND TRL",n:"7820",t:"CprBB"},{s:"PORTLAND TRL",n:"7824",t:"Both"},{s:"PORTLAND TRL",n:"7828",t:""},{s:"PORTLAND TRL",n:"7832",t:"CprBB"},{s:"PORTLAND TRL",n:"7836",t:""},{s:"PORTLAND TRL",n:"7840",t:""},{s:"PORTLAND TRL",n:"7844",t:"Both"},{s:"PORTLAND TRL",n:"7848",t:""},{s:"PORTLAND TRL",n:"7852",t:""},{s:"PORTLAND TRL",n:"7900",t:""},{s:"PORTLAND TRL",n:"7904",t:""},{s:"PORTLAND TRL",n:"7908",t:""},{s:"PORTLAND TRL",n:"7912",t:""},{s:"PORTLAND TRL",n:"7916",t:""},{s:"PORTLAND TRL",n:"7920",t:"Wrls"},{s:"PORTLAND TRL",n:"7928",t:""},
+  // RIMINI TRL
+  {s:"RIMINI TRL",n:"8001",t:""},{s:"RIMINI TRL",n:"8005",t:"Wrls"},{s:"RIMINI TRL",n:"8009",t:""},{s:"RIMINI TRL",n:"8013",t:"Wrls"},{s:"RIMINI TRL",n:"8017",t:""},{s:"RIMINI TRL",n:"8021",t:""},{s:"RIMINI TRL",n:"8025",t:"Wrls"},{s:"RIMINI TRL",n:"8029",t:"Both"},{s:"RIMINI TRL",n:"8101",t:""},{s:"RIMINI TRL",n:"8105",t:"Wrls"},{s:"RIMINI TRL",n:"8109",t:"Both"},{s:"RIMINI TRL",n:"8113",t:"Wrls"},{s:"RIMINI TRL",n:"8117",t:"Wrls"},{s:"RIMINI TRL",n:"8121",t:"Both"},{s:"RIMINI TRL",n:"8125",t:""},
+  // ROSSELLO DR
+  {s:"ROSSELLO DR",n:"13400",t:""},{s:"ROSSELLO DR",n:"13401",t:""},{s:"ROSSELLO DR",n:"13404",t:""},{s:"ROSSELLO DR",n:"13405",t:""},{s:"ROSSELLO DR",n:"13408",t:""},{s:"ROSSELLO DR",n:"13409",t:""},{s:"ROSSELLO DR",n:"13412",t:""},{s:"ROSSELLO DR",n:"13413",t:"CprBB"},{s:"ROSSELLO DR",n:"13416",t:""},{s:"ROSSELLO DR",n:"13417",t:"CprBB"},{s:"ROSSELLO DR",n:"13420",t:"Both"},{s:"ROSSELLO DR",n:"13421",t:"Wrls"},
+  // TAMAYO DR (T1 - Extended)
+  {s:"TAMAYO DR",n:"13348",t:"Wrls"},{s:"TAMAYO DR",n:"13400",t:""},{s:"TAMAYO DR",n:"13404",t:""},{s:"TAMAYO DR",n:"13408",t:""},{s:"TAMAYO DR",n:"13412",t:""},{s:"TAMAYO DR",n:"13416",t:""},{s:"TAMAYO DR",n:"13420",t:""},{s:"TAMAYO DR",n:"13424",t:""},{s:"TAMAYO DR",n:"13425",t:"Wrls"},{s:"TAMAYO DR",n:"13428",t:""},{s:"TAMAYO DR",n:"13429",t:""},{s:"TAMAYO DR",n:"13433",t:"Wrls"},{s:"TAMAYO DR",n:"13437",t:""},{s:"TAMAYO DR",n:"13441",t:""},{s:"TAMAYO DR",n:"13445",t:""},
+  // TOSSA LN
+  {s:"TOSSA LN",n:"13400",t:"Wrls"},{s:"TOSSA LN",n:"13401",t:""},{s:"TOSSA LN",n:"13404",t:"Wrls"},{s:"TOSSA LN",n:"13405",t:"Wrls"},{s:"TOSSA LN",n:"13408",t:"Both"},{s:"TOSSA LN",n:"13409",t:""},{s:"TOSSA LN",n:"13412",t:"CprBB"},{s:"TOSSA LN",n:"13413",t:"CprBB"},{s:"TOSSA LN",n:"13416",t:""},{s:"TOSSA LN",n:"13417",t:""},{s:"TOSSA LN",n:"13420",t:""},{s:"TOSSA LN",n:"13421",t:"Wrls"},{s:"TOSSA LN",n:"13424",t:""},{s:"TOSSA LN",n:"13425",t:""},{s:"TOSSA LN",n:"13428",t:""},
+  // TOVAR DR (T1 - Extended, small)
+  {s:"TOVAR DR",n:"7401",t:""},{s:"TOVAR DR",n:"7405",t:""},
+  // VARCELLA TRL
+  {s:"VARCELLA TRL",n:"7801",t:"Wrls"},{s:"VARCELLA TRL",n:"7805",t:"Wrls"},{s:"VARCELLA TRL",n:"7809",t:""},{s:"VARCELLA TRL",n:"7901",t:""},{s:"VARCELLA TRL",n:"7905",t:"Wrls"},{s:"VARCELLA TRL",n:"7909",t:"Wrls"},{s:"VARCELLA TRL",n:"7913",t:""},
+];
+
+const DOORS_T2 = [
+  // AMASIA CV
+  {s:"AMASIA CV",n:"8201",t:"Wrls"},{s:"AMASIA CV",n:"8204",t:""},{s:"AMASIA CV",n:"8205",t:""},{s:"AMASIA CV",n:"8208",t:""},{s:"AMASIA CV",n:"8212",t:""},{s:"AMASIA CV",n:"8215",t:"Wrls"},{s:"AMASIA CV",n:"8216",t:""},{s:"AMASIA CV",n:"8219",t:"Both"},{s:"AMASIA CV",n:"8220",t:"CprBB"},{s:"AMASIA CV",n:"8223",t:"CprBB"},{s:"AMASIA CV",n:"8224",t:""},{s:"AMASIA CV",n:"8227",t:"Wrls"},
+  // AMASIA DR
+  {s:"AMASIA DR",n:"13221",t:""},{s:"AMASIA DR",n:"13224",t:"Both"},{s:"AMASIA DR",n:"13225",t:"Wrls"},{s:"AMASIA DR",n:"13226",t:""},{s:"AMASIA DR",n:"13229",t:""},{s:"AMASIA DR",n:"13301",t:"Both"},{s:"AMASIA DR",n:"13305",t:""},{s:"AMASIA DR",n:"13309",t:""},{s:"AMASIA DR",n:"13313",t:"CprBB"},{s:"AMASIA DR",n:"13317",t:"Both"},{s:"AMASIA DR",n:"13321",t:""},{s:"AMASIA DR",n:"13324",t:"Both"},{s:"AMASIA DR",n:"13325",t:""},{s:"AMASIA DR",n:"13328",t:""},{s:"AMASIA DR",n:"13329",t:""},{s:"AMASIA DR",n:"13332",t:"Wrls"},{s:"AMASIA DR",n:"13333",t:"Wrls"},{s:"AMASIA DR",n:"13336",t:"Wrls"},{s:"AMASIA DR",n:"13337",t:""},{s:"AMASIA DR",n:"13341",t:""},{s:"AMASIA DR",n:"13345",t:"Wrls"},{s:"AMASIA DR",n:"13349",t:""},{s:"AMASIA DR",n:"13352",t:""},{s:"AMASIA DR",n:"13353",t:""},{s:"AMASIA DR",n:"13356",t:""},{s:"AMASIA DR",n:"13357",t:""},{s:"AMASIA DR",n:"13360",t:"Both"},{s:"AMASIA DR",n:"13361",t:""},{s:"AMASIA DR",n:"13363",t:"Both"},{s:"AMASIA DR",n:"13364",t:""},{s:"AMASIA DR",n:"13367",t:""},{s:"AMASIA DR",n:"13371",t:""},{s:"AMASIA DR",n:"13375",t:"CprBB"},{s:"AMASIA DR",n:"13379",t:"Wrls"},{s:"AMASIA DR",n:"13383",t:""},{s:"AMASIA DR",n:"13387",t:""},{s:"AMASIA DR",n:"13391",t:"Wrls"},
+  // AVELLA DR
+  {s:"AVELLA DR",n:"8101",t:"CprBB"},{s:"AVELLA DR",n:"8105",t:""},{s:"AVELLA DR",n:"8109",t:""},{s:"AVELLA DR",n:"8113",t:"Both"},{s:"AVELLA DR",n:"8117",t:""},{s:"AVELLA DR",n:"8121",t:"CprBB"},{s:"AVELLA DR",n:"8125",t:"Both"},{s:"AVELLA DR",n:"8129",t:""},
+  // BLACK CANYON DR
+  {s:"BLACK CANYON DR",n:"13300",t:""},{s:"BLACK CANYON DR",n:"13301",t:""},{s:"BLACK CANYON DR",n:"13302",t:""},{s:"BLACK CANYON DR",n:"13303",t:""},{s:"BLACK CANYON DR",n:"13304",t:""},{s:"BLACK CANYON DR",n:"13305",t:""},{s:"BLACK CANYON DR",n:"13306",t:""},{s:"BLACK CANYON DR",n:"13307",t:"Wrls"},{s:"BLACK CANYON DR",n:"13308",t:""},{s:"BLACK CANYON DR",n:"13309",t:""},{s:"BLACK CANYON DR",n:"13310",t:""},{s:"BLACK CANYON DR",n:"13311",t:""},{s:"BLACK CANYON DR",n:"13312",t:""},{s:"BLACK CANYON DR",n:"13313",t:""},{s:"BLACK CANYON DR",n:"13314",t:""},{s:"BLACK CANYON DR",n:"13315",t:""},{s:"BLACK CANYON DR",n:"13317",t:"Wrls"},{s:"BLACK CANYON DR",n:"13319",t:"Wrls"},{s:"BLACK CANYON DR",n:"13321",t:""},{s:"BLACK CANYON DR",n:"13322",t:""},{s:"BLACK CANYON DR",n:"13323",t:"Both"},{s:"BLACK CANYON DR",n:"13324",t:""},{s:"BLACK CANYON DR",n:"13325",t:"Both"},{s:"BLACK CANYON DR",n:"13326",t:""},{s:"BLACK CANYON DR",n:"13327",t:""},{s:"BLACK CANYON DR",n:"13328",t:""},{s:"BLACK CANYON DR",n:"13329",t:""},{s:"BLACK CANYON DR",n:"13330",t:""},{s:"BLACK CANYON DR",n:"13331",t:"Wrls"},{s:"BLACK CANYON DR",n:"13332",t:"CprBB"},{s:"BLACK CANYON DR",n:"13333",t:""},{s:"BLACK CANYON DR",n:"13334",t:"Wrls"},{s:"BLACK CANYON DR",n:"13335",t:""},{s:"BLACK CANYON DR",n:"13336",t:""},{s:"BLACK CANYON DR",n:"13337",t:""},{s:"BLACK CANYON DR",n:"13338",t:""},{s:"BLACK CANYON DR",n:"13339",t:"Wrls"},{s:"BLACK CANYON DR",n:"13341",t:""},{s:"BLACK CANYON DR",n:"13343",t:"Wrls"},{s:"BLACK CANYON DR",n:"13345",t:"Wrls"},
+  // DARWIN CV
+  {s:"DARWIN CV",n:"8101",t:"CprBB"},{s:"DARWIN CV",n:"8105",t:""},{s:"DARWIN CV",n:"8108",t:"Both"},{s:"DARWIN CV",n:"8109",t:"Both"},{s:"DARWIN CV",n:"8113",t:""},{s:"DARWIN CV",n:"8114",t:""},{s:"DARWIN CV",n:"8117",t:""},{s:"DARWIN CV",n:"8118",t:"Wrls"},{s:"DARWIN CV",n:"8121",t:"Wrls"},{s:"DARWIN CV",n:"8122",t:"Wrls"},{s:"DARWIN CV",n:"8125",t:""},
+  // DARWIN LN
+  {s:"DARWIN LN",n:"13219",t:""},{s:"DARWIN LN",n:"13220",t:""},{s:"DARWIN LN",n:"13223",t:""},{s:"DARWIN LN",n:"13224",t:"CprBB"},{s:"DARWIN LN",n:"13227",t:"Wrls"},{s:"DARWIN LN",n:"13228",t:"Both"},{s:"DARWIN LN",n:"13235",t:""},{s:"DARWIN LN",n:"13239",t:"Wrls"},{s:"DARWIN LN",n:"13243",t:"CprBB"},{s:"DARWIN LN",n:"13244",t:""},{s:"DARWIN LN",n:"13247",t:"CprBB"},{s:"DARWIN LN",n:"13248",t:""},{s:"DARWIN LN",n:"13251",t:""},{s:"DARWIN LN",n:"13252",t:"Both"},{s:"DARWIN LN",n:"13255",t:""},{s:"DARWIN LN",n:"13256",t:"Wrls"},{s:"DARWIN LN",n:"13259",t:"CprBB"},{s:"DARWIN LN",n:"13263",t:""},{s:"DARWIN LN",n:"13264",t:""},{s:"DARWIN LN",n:"13267",t:"Wrls"},{s:"DARWIN LN",n:"13268",t:""},{s:"DARWIN LN",n:"13271",t:""},{s:"DARWIN LN",n:"13272",t:""},{s:"DARWIN LN",n:"13275",t:""},{s:"DARWIN LN",n:"13276",t:""},{s:"DARWIN LN",n:"13279",t:""},
+  // HENDRICKS DR
+  {s:"HENDRICKS DR",n:"8000",t:"Wrls"},{s:"HENDRICKS DR",n:"8004",t:""},{s:"HENDRICKS DR",n:"8008",t:""},{s:"HENDRICKS DR",n:"8012",t:"Wrls"},{s:"HENDRICKS DR",n:"8016",t:""},{s:"HENDRICKS DR",n:"8020",t:""},{s:"HENDRICKS DR",n:"8024",t:"Wrls"},{s:"HENDRICKS DR",n:"8028",t:""},{s:"HENDRICKS DR",n:"8100",t:""},{s:"HENDRICKS DR",n:"8104",t:""},{s:"HENDRICKS DR",n:"8105",t:"Wrls"},{s:"HENDRICKS DR",n:"8108",t:""},{s:"HENDRICKS DR",n:"8109",t:""},{s:"HENDRICKS DR",n:"8112",t:""},{s:"HENDRICKS DR",n:"8113",t:""},{s:"HENDRICKS DR",n:"8116",t:""},{s:"HENDRICKS DR",n:"8120",t:""},{s:"HENDRICKS DR",n:"8124",t:""},{s:"HENDRICKS DR",n:"8128",t:""},
+  // HUMPHREY DR
+  {s:"HUMPHREY DR",n:"13139",t:""},{s:"HUMPHREY DR",n:"13143",t:""},{s:"HUMPHREY DR",n:"13146",t:""},{s:"HUMPHREY DR",n:"13147",t:""},{s:"HUMPHREY DR",n:"13150",t:""},{s:"HUMPHREY DR",n:"13151",t:""},{s:"HUMPHREY DR",n:"13154",t:"Wrls"},{s:"HUMPHREY DR",n:"13155",t:"Wrls"},{s:"HUMPHREY DR",n:"13158",t:"Wrls"},{s:"HUMPHREY DR",n:"13159",t:""},{s:"HUMPHREY DR",n:"13162",t:""},{s:"HUMPHREY DR",n:"13163",t:""},{s:"HUMPHREY DR",n:"13166",t:""},{s:"HUMPHREY DR",n:"13200",t:""},{s:"HUMPHREY DR",n:"13201",t:""},{s:"HUMPHREY DR",n:"13204",t:"Both"},{s:"HUMPHREY DR",n:"13205",t:"CprBB"},{s:"HUMPHREY DR",n:"13208",t:""},{s:"HUMPHREY DR",n:"13211",t:"Wrls"},{s:"HUMPHREY DR",n:"13212",t:""},{s:"HUMPHREY DR",n:"13216",t:"Both"},{s:"HUMPHREY DR",n:"13217",t:""},{s:"HUMPHREY DR",n:"13220",t:""},{s:"HUMPHREY DR",n:"13224",t:""},{s:"HUMPHREY DR",n:"13225",t:"Wrls"},{s:"HUMPHREY DR",n:"13228",t:""},{s:"HUMPHREY DR",n:"13229",t:""},{s:"HUMPHREY DR",n:"13232",t:""},{s:"HUMPHREY DR",n:"13236",t:""},{s:"HUMPHREY DR",n:"13240",t:""},{s:"HUMPHREY DR",n:"13300",t:""},{s:"HUMPHREY DR",n:"13304",t:"Wrls"},{s:"HUMPHREY DR",n:"13305",t:""},{s:"HUMPHREY DR",n:"13308",t:""},{s:"HUMPHREY DR",n:"13309",t:""},{s:"HUMPHREY DR",n:"13312",t:""},{s:"HUMPHREY DR",n:"13313",t:""},{s:"HUMPHREY DR",n:"13316",t:""},{s:"HUMPHREY DR",n:"13317",t:"CprBB"},{s:"HUMPHREY DR",n:"13320",t:"Both"},{s:"HUMPHREY DR",n:"13321",t:""},{s:"HUMPHREY DR",n:"13324",t:""},{s:"HUMPHREY DR",n:"13325",t:""},{s:"HUMPHREY DR",n:"13328",t:""},{s:"HUMPHREY DR",n:"13329",t:""},{s:"HUMPHREY DR",n:"13332",t:""},{s:"HUMPHREY DR",n:"13336",t:"Wrls"},{s:"HUMPHREY DR",n:"13340",t:""},{s:"HUMPHREY DR",n:"13344",t:""},
+  // ITO CV
+  {s:"ITO CV",n:"8204",t:""},{s:"ITO CV",n:"8205",t:""},{s:"ITO CV",n:"8208",t:""},{s:"ITO CV",n:"8209",t:"Wrls"},{s:"ITO CV",n:"8213",t:"Wrls"},
+  // JENNER LN
+  {s:"JENNER LN",n:"13215",t:"Wrls"},{s:"JENNER LN",n:"13216",t:"Wrls"},{s:"JENNER LN",n:"13219",t:""},{s:"JENNER LN",n:"13220",t:"Wrls"},
+  // KIANA DR
+  {s:"KIANA DR",n:"8100",t:""},{s:"KIANA DR",n:"8101",t:""},{s:"KIANA DR",n:"8104",t:""},{s:"KIANA DR",n:"8105",t:"Wrls"},{s:"KIANA DR",n:"8108",t:""},{s:"KIANA DR",n:"8109",t:""},{s:"KIANA DR",n:"8112",t:""},{s:"KIANA DR",n:"8113",t:"Wrls"},{s:"KIANA DR",n:"8116",t:""},{s:"KIANA DR",n:"8117",t:""},{s:"KIANA DR",n:"8120",t:""},
+  // KINGMAN DR
+  {s:"KINGMAN DR",n:"13305",t:""},{s:"KINGMAN DR",n:"13306",t:"Wrls"},{s:"KINGMAN DR",n:"13309",t:"Wrls"},{s:"KINGMAN DR",n:"13313",t:""},{s:"KINGMAN DR",n:"13317",t:""},{s:"KINGMAN DR",n:"13321",t:""},{s:"KINGMAN DR",n:"13325",t:"Both"},{s:"KINGMAN DR",n:"13329",t:"Wrls"},{s:"KINGMAN DR",n:"13333",t:""},{s:"KINGMAN DR",n:"13337",t:""},{s:"KINGMAN DR",n:"13341",t:""},{s:"KINGMAN DR",n:"13345",t:""},{s:"KINGMAN DR",n:"13349",t:"Both"},
+  // LULING LN
+  {s:"LULING LN",n:"7900",t:"Wrls"},{s:"LULING LN",n:"7901",t:"Wrls"},{s:"LULING LN",n:"7905",t:"Both"},{s:"LULING LN",n:"7908",t:""},{s:"LULING LN",n:"7909",t:""},{s:"LULING LN",n:"7913",t:""},{s:"LULING LN",n:"7914",t:""},{s:"LULING LN",n:"7917",t:""},{s:"LULING LN",n:"7920",t:""},{s:"LULING LN",n:"7921",t:"Wrls"},{s:"LULING LN",n:"7924",t:""},{s:"LULING LN",n:"7925",t:""},{s:"LULING LN",n:"7928",t:""},{s:"LULING LN",n:"7929",t:"Wrls"},{s:"LULING LN",n:"7932",t:""},{s:"LULING LN",n:"7933",t:""},{s:"LULING LN",n:"7936",t:""},{s:"LULING LN",n:"7937",t:""},{s:"LULING LN",n:"7940",t:"Wrls"},{s:"LULING LN",n:"8000",t:""},{s:"LULING LN",n:"8001",t:""},{s:"LULING LN",n:"8004",t:"Wrls"},{s:"LULING LN",n:"8005",t:"Wrls"},{s:"LULING LN",n:"8009",t:""},{s:"LULING LN",n:"8013",t:"CprBB"},{s:"LULING LN",n:"8017",t:""},{s:"LULING LN",n:"8021",t:"CprBB"},{s:"LULING LN",n:"8025",t:""},{s:"LULING LN",n:"8029",t:""},{s:"LULING LN",n:"8033",t:""},{s:"LULING LN",n:"8100",t:"CprBB"},{s:"LULING LN",n:"8101",t:"Both"},{s:"LULING LN",n:"8104",t:""},{s:"LULING LN",n:"8105",t:""},{s:"LULING LN",n:"8108",t:"Wrls"},{s:"LULING LN",n:"8109",t:"Both"},{s:"LULING LN",n:"8112",t:"CprBB"},{s:"LULING LN",n:"8113",t:""},{s:"LULING LN",n:"8116",t:""},{s:"LULING LN",n:"8117",t:"Both"},{s:"LULING LN",n:"8120",t:""},{s:"LULING LN",n:"8121",t:"Wrls"},{s:"LULING LN",n:"8124",t:"Wrls"},{s:"LULING LN",n:"8125",t:"Wrls"},{s:"LULING LN",n:"8128",t:""},{s:"LULING LN",n:"8129",t:"Both"},{s:"LULING LN",n:"8133",t:"Wrls"},{s:"LULING LN",n:"8137",t:""},{s:"LULING LN",n:"8141",t:"Wrls"},{s:"LULING LN",n:"8201",t:""},{s:"LULING LN",n:"8205",t:"Wrls"},{s:"LULING LN",n:"8209",t:""},{s:"LULING LN",n:"8213",t:""},{s:"LULING LN",n:"8217",t:""},{s:"LULING LN",n:"8221",t:"CprBB"},{s:"LULING LN",n:"8224",t:"Both"},{s:"LULING LN",n:"8225",t:"CprBB"},{s:"LULING LN",n:"8228",t:""},{s:"LULING LN",n:"8229",t:""},{s:"LULING LN",n:"8232",t:""},{s:"LULING LN",n:"8233",t:"Both"},{s:"LULING LN",n:"8236",t:"Wrls"},{s:"LULING LN",n:"8237",t:"Both"},{s:"LULING LN",n:"8240",t:""},{s:"LULING LN",n:"8241",t:""},{s:"LULING LN",n:"8244",t:""},{s:"LULING LN",n:"8245",t:""},{s:"LULING LN",n:"8248",t:"Wrls"},{s:"LULING LN",n:"8249",t:""},{s:"LULING LN",n:"8252",t:"Wrls"},{s:"LULING LN",n:"8253",t:""},
+  // MARRERO DR
+  {s:"MARRERO DR",n:"13203",t:""},{s:"MARRERO DR",n:"13205",t:""},{s:"MARRERO DR",n:"13207",t:"Wrls"},{s:"MARRERO DR",n:"13209",t:"Wrls"},{s:"MARRERO DR",n:"13211",t:""},{s:"MARRERO DR",n:"13213",t:""},{s:"MARRERO DR",n:"13215",t:""},{s:"MARRERO DR",n:"13217",t:"Wrls"},{s:"MARRERO DR",n:"13219",t:""},{s:"MARRERO DR",n:"13221",t:""},{s:"MARRERO DR",n:"13300",t:""},{s:"MARRERO DR",n:"13301",t:""},{s:"MARRERO DR",n:"13302",t:""},{s:"MARRERO DR",n:"13303",t:""},{s:"MARRERO DR",n:"13304",t:""},{s:"MARRERO DR",n:"13305",t:""},{s:"MARRERO DR",n:"13306",t:""},{s:"MARRERO DR",n:"13307",t:""},
+  // MONTAQUE CV
+  {s:"MONTAQUE CV",n:"13300",t:""},{s:"MONTAQUE CV",n:"13302",t:"Wrls"},{s:"MONTAQUE CV",n:"13303",t:""},{s:"MONTAQUE CV",n:"13304",t:""},{s:"MONTAQUE CV",n:"13305",t:"Wrls"},
+  // MONTAQUE DR
+  {s:"MONTAQUE DR",n:"7502",t:""},{s:"MONTAQUE DR",n:"7504",t:""},{s:"MONTAQUE DR",n:"7506",t:""},{s:"MONTAQUE DR",n:"7508",t:""},{s:"MONTAQUE DR",n:"7602",t:"Wrls"},{s:"MONTAQUE DR",n:"7603",t:""},{s:"MONTAQUE DR",n:"7604",t:""},{s:"MONTAQUE DR",n:"7605",t:""},{s:"MONTAQUE DR",n:"7607",t:""},{s:"MONTAQUE DR",n:"7609",t:""},{s:"MONTAQUE DR",n:"7702",t:""},
+  // OSBORNE DR (T2 - 78729)
+  {s:"OSBORNE DR 78729",n:"7901",t:"Wrls"},{s:"OSBORNE DR 78729",n:"7905",t:""},{s:"OSBORNE DR 78729",n:"7909",t:""},{s:"OSBORNE DR 78729",n:"7913",t:""},{s:"OSBORNE DR 78729",n:"7917",t:""},{s:"OSBORNE DR 78729",n:"7921",t:"Wrls"},{s:"OSBORNE DR 78729",n:"7925",t:""},{s:"OSBORNE DR 78729",n:"8001",t:""},{s:"OSBORNE DR 78729",n:"8005",t:""},{s:"OSBORNE DR 78729",n:"8009",t:""},{s:"OSBORNE DR 78729",n:"8013",t:""},{s:"OSBORNE DR 78729",n:"8103",t:""},{s:"OSBORNE DR 78729",n:"8105",t:""},{s:"OSBORNE DR 78729",n:"8109",t:""},{s:"OSBORNE DR 78729",n:"8113",t:""},{s:"OSBORNE DR 78729",n:"8117",t:""},{s:"OSBORNE DR 78729",n:"8121",t:""},{s:"OSBORNE DR 78729",n:"8125",t:""},{s:"OSBORNE DR 78729",n:"8129",t:"CprBB"},{s:"OSBORNE DR 78729",n:"8133",t:""},{s:"OSBORNE DR 78729",n:"8137",t:"Wrls"},
+  // SNOOK HOOK TRL
+  {s:"SNOOK HOOK TRL",n:"7900",t:""},{s:"SNOOK HOOK TRL",n:"7901",t:""},{s:"SNOOK HOOK TRL",n:"7905",t:""},{s:"SNOOK HOOK TRL",n:"7908",t:""},{s:"SNOOK HOOK TRL",n:"7909",t:""},{s:"SNOOK HOOK TRL",n:"7912",t:""},{s:"SNOOK HOOK TRL",n:"7913",t:""},{s:"SNOOK HOOK TRL",n:"7916",t:""},{s:"SNOOK HOOK TRL",n:"7917",t:""},{s:"SNOOK HOOK TRL",n:"7920",t:""},{s:"SNOOK HOOK TRL",n:"7921",t:""},{s:"SNOOK HOOK TRL",n:"7924",t:""},{s:"SNOOK HOOK TRL",n:"7925",t:"Wrls"},{s:"SNOOK HOOK TRL",n:"7928",t:""},{s:"SNOOK HOOK TRL",n:"7929",t:"Wrls"},{s:"SNOOK HOOK TRL",n:"7932",t:"Wrls"},{s:"SNOOK HOOK TRL",n:"7933",t:""},{s:"SNOOK HOOK TRL",n:"7936",t:""},{s:"SNOOK HOOK TRL",n:"7940",t:"Wrls"},{s:"SNOOK HOOK TRL",n:"7944",t:""},{s:"SNOOK HOOK TRL",n:"8000",t:"Wrls"},{s:"SNOOK HOOK TRL",n:"8004",t:""},{s:"SNOOK HOOK TRL",n:"8008",t:"Wrls"},{s:"SNOOK HOOK TRL",n:"8012",t:""},
+  // TAMAYO DR (T2 - 78729)
+  {s:"TAMAYO DR 78729",n:"13304",t:""},{s:"TAMAYO DR 78729",n:"13308",t:""},{s:"TAMAYO DR 78729",n:"13312",t:"Wrls"},{s:"TAMAYO DR 78729",n:"13313",t:""},{s:"TAMAYO DR 78729",n:"13316",t:""},{s:"TAMAYO DR 78729",n:"13317",t:"Both"},{s:"TAMAYO DR 78729",n:"13320",t:"Wrls"},{s:"TAMAYO DR 78729",n:"13321",t:""},{s:"TAMAYO DR 78729",n:"13324",t:""},{s:"TAMAYO DR 78729",n:"13325",t:""},{s:"TAMAYO DR 78729",n:"13328",t:""},{s:"TAMAYO DR 78729",n:"13329",t:""},{s:"TAMAYO DR 78729",n:"13332",t:""},{s:"TAMAYO DR 78729",n:"13333",t:"Wrls"},{s:"TAMAYO DR 78729",n:"13336",t:"Wrls"},{s:"TAMAYO DR 78729",n:"13337",t:""},{s:"TAMAYO DR 78729",n:"13340",t:""},{s:"TAMAYO DR 78729",n:"13341",t:"Both"},{s:"TAMAYO DR 78729",n:"13344",t:"Wrls"},{s:"TAMAYO DR 78729",n:"13401",t:""},{s:"TAMAYO DR 78729",n:"13405",t:""},{s:"TAMAYO DR 78729",n:"13409",t:""},
+  // TILDER DR
+  {s:"TILDER DR",n:"13117",t:""},
+  // TOVAR DR (T2 - 78729, full)
+  {s:"TOVAR DR 78729",n:"7400",t:"Both"},{s:"TOVAR DR 78729",n:"7404",t:""},{s:"TOVAR DR 78729",n:"7408",t:""},{s:"TOVAR DR 78729",n:"7412",t:""},{s:"TOVAR DR 78729",n:"7416",t:""},{s:"TOVAR DR 78729",n:"7420",t:"Wrls"},{s:"TOVAR DR 78729",n:"7424",t:"Wrls"},{s:"TOVAR DR 78729",n:"7428",t:"CprBB"},{s:"TOVAR DR 78729",n:"7432",t:"CprBB"},{s:"TOVAR DR 78729",n:"7436",t:"Both"},{s:"TOVAR DR 78729",n:"7500",t:""},{s:"TOVAR DR 78729",n:"7504",t:"Wrls"},{s:"TOVAR DR 78729",n:"7508",t:""},{s:"TOVAR DR 78729",n:"7512",t:"Wrls"},{s:"TOVAR DR 78729",n:"7516",t:"Wrls"},{s:"TOVAR DR 78729",n:"7520",t:""},{s:"TOVAR DR 78729",n:"7600",t:""},{s:"TOVAR DR 78729",n:"7604",t:"Wrls"},{s:"TOVAR DR 78729",n:"7608",t:"CprBB"},{s:"TOVAR DR 78729",n:"7612",t:""},{s:"TOVAR DR 78729",n:"7616",t:"Wrls"},{s:"TOVAR DR 78729",n:"7620",t:"Wrls"},{s:"TOVAR DR 78729",n:"7624",t:""},{s:"TOVAR DR 78729",n:"7700",t:"Both"},{s:"TOVAR DR 78729",n:"7704",t:"Wrls"},{s:"TOVAR DR 78729",n:"7708",t:""},{s:"TOVAR DR 78729",n:"7712",t:""},{s:"TOVAR DR 78729",n:"7716",t:"Wrls"},
+  // VENDRELL DR
+  {s:"VENDRELL DR",n:"13201",t:""},{s:"VENDRELL DR",n:"13202",t:""},{s:"VENDRELL DR",n:"13203",t:""},{s:"VENDRELL DR",n:"13204",t:""},{s:"VENDRELL DR",n:"13205",t:""},{s:"VENDRELL DR",n:"13206",t:""},{s:"VENDRELL DR",n:"13207",t:""},{s:"VENDRELL DR",n:"13208",t:""},{s:"VENDRELL DR",n:"13209",t:""},{s:"VENDRELL DR",n:"13210",t:""},{s:"VENDRELL DR",n:"13211",t:"Both"},{s:"VENDRELL DR",n:"13212",t:""},{s:"VENDRELL DR",n:"13213",t:""},{s:"VENDRELL DR",n:"13214",t:"Wrls"},{s:"VENDRELL DR",n:"13215",t:"Both"},{s:"VENDRELL DR",n:"13216",t:""},{s:"VENDRELL DR",n:"13217",t:""},{s:"VENDRELL DR",n:"13219",t:"Wrls"},
+  // WINDRUSH DR
+  {s:"WINDRUSH DR",n:"7501",t:"Wrls"},{s:"WINDRUSH DR",n:"7503",t:""},{s:"WINDRUSH DR",n:"7505",t:"CprBB"},{s:"WINDRUSH DR",n:"7506",t:""},{s:"WINDRUSH DR",n:"7507",t:""},{s:"WINDRUSH DR",n:"7508",t:"Wrls"},{s:"WINDRUSH DR",n:"7509",t:""},{s:"WINDRUSH DR",n:"7510",t:""},{s:"WINDRUSH DR",n:"7511",t:""},{s:"WINDRUSH DR",n:"7512",t:"Wrls"},{s:"WINDRUSH DR",n:"7513",t:""},{s:"WINDRUSH DR",n:"7514",t:""},{s:"WINDRUSH DR",n:"7515",t:""},{s:"WINDRUSH DR",n:"7516",t:""},{s:"WINDRUSH DR",n:"7518",t:""},{s:"WINDRUSH DR",n:"7519",t:""},{s:"WINDRUSH DR",n:"7521",t:""},{s:"WINDRUSH DR",n:"7523",t:""},{s:"WINDRUSH DR",n:"7525",t:""},{s:"WINDRUSH DR",n:"7527",t:""},{s:"WINDRUSH DR",n:"7600",t:""},{s:"WINDRUSH DR",n:"7602",t:""},{s:"WINDRUSH DR",n:"7604",t:""},{s:"WINDRUSH DR",n:"7606",t:"Wrls"},{s:"WINDRUSH DR",n:"7608",t:""},
+];
+
+const STATUS_OPTIONS = [
+  {val:'',label:'— Not visited'},
+  {val:'sold',label:'✅ Sold'},
+  {val:'follow',label:'🔁 Follow Up'},
+  {val:'comeback',label:'🕐 Come Back'},
+  {val:'not-home',label:'🚪 Not Home'},
+  {val:'no',label:'❌ No Answer'},
+  {val:'not-interested',label:'🚫 Not Interested'},
+];
+
+let state = {};
+let myName = localStorage.getItem('d2d_myname') || '';
+let currentTerritory = 1;
+let lastPullHash = '';
+
+function doorKey(n, s) { return `${n}|${s}`; }
+
+async function pullState() {
+  try {
+    const r = await window.storage.get('attd2d_v4_philo_combined', true);
+    if (r && r.value) {
+      const hash = r.value.slice(0,40);
+      if (hash === lastPullHash) { setSyncStatus('live'); return; }
+      lastPullHash = hash;
+      state = JSON.parse(r.value.slice(40));
+      refreshDoors();
+      updateStats();
+    }
+    setSyncStatus('live');
+  } catch(e) { setSyncStatus('error'); }
+}
+
+async function pushState() {
+  setSyncStatus('syncing');
+  try {
+    const hash = String(Date.now()).padStart(40,'0').slice(-40);
+    await window.storage.set('attd2d_v4_philo_combined', hash + JSON.stringify(state), true);
+    lastPullHash = hash;
+    setSyncStatus('live');
+  } catch(e) { setSyncStatus('error'); }
+}
+
+function setSyncStatus(s) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  dot.className = 'sync-dot ' + (s==='live'?'live':s==='syncing'?'syncing':'');
+  lbl.textContent = s==='live'?'Live':s==='syncing'?'Syncing...':'Offline';
+}
+
+function switchTerritory(t) {
+  currentTerritory = t;
+  document.getElementById('tab1').classList.toggle('active', t===1);
+  document.getElementById('tab2').classList.toggle('active', t===2);
+  document.getElementById('territory1').classList.toggle('active', t===1);
+  document.getElementById('territory2').classList.toggle('active', t===2);
+  updateStats();
+}
+
+function showNameModal() {
+  document.getElementById('nameModal').classList.add('open');
+  document.getElementById('nameModalInput').value = myName;
+  setTimeout(()=>document.getElementById('nameModalInput').focus(),100);
+}
+function saveName() {
+  const v = document.getElementById('nameModalInput').value.trim();
+  if(!v) return;
+  myName = v;
+  localStorage.setItem('d2d_myname', v);
+  document.getElementById('nameModal').classList.remove('open');
+  document.getElementById('repLabel').textContent = '👤 ' + myName;
+  document.getElementById('nameBtn').textContent = '👤 ' + myName;
+  document.getElementById('nameBtn').classList.add('active');
+  showToast('Name set: ' + myName);
+}
+document.getElementById('nameModalInput').addEventListener('keydown', e => { if(e.key==='Enter') saveName(); });
+document.getElementById('nameModal').addEventListener('click', e => { if(e.target===document.getElementById('nameModal')) document.getElementById('nameModal').classList.remove('open'); });
+
+function tagBadges(t) {
+  if(!t) return '';
+  if(t==='Both') return '<span class="tag tag-both">Both</span>';
+  let o='';
+  if(t==='Wrls') o+='<span class="tag tag-wrls">Wrls</span>';
+  if(t==='CprBB') o+='<span class="tag tag-cpb">CprBB</span>';
+  return o;
+}
+
+function selClass(v) { return v ? 'status-'+v : ''; }
+
+function buildOptions(cur) {
+  return STATUS_OPTIONS.map(o=>`<option value="${o.val}"${cur===o.val?' selected':''}>${o.label}</option>`).join('');
+}
+
+function buildZones(containerId, territory, allDoors) {
+  const el = document.getElementById(containerId);
+  let html = '';
+  Object.entries(territory.zones).forEach(([zid, zone]) => {
+    const ico = zone.ico;
+    html += `<div class="zone-wrap">
+      <div class="zone-hdr" onclick="toggleZone('z${zid}','chev${zid}')">
+        <div class="zone-ico ${ico}">${zid}</div>
+        <div class="zone-info">
+          <div class="zone-name">${zone.label}</div>
+          <div class="zone-meta">${zone.streets.length} streets</div>
+        </div>
+        <span class="zone-chev open" id="chev${zid}">▼</span>
+      </div>
+      <div class="zone-body open" id="z${zid}">`;
+
+    zone.streets.forEach(streetName => {
+      const doors = allDoors.filter(d => d.s === streetName);
+      if(!doors.length) return;
+      const sid = 'st_' + streetName.replace(/[^a-zA-Z0-9]/g,'_');
+      html += `<div class="street-section">
+        <div class="street-hdr" onclick="toggleStreet('${sid}','sch_${sid}')">
+          <div>
+            <div class="street-name-label">${streetName.replace(' 78729','').replace(' Extended','')}</div>
+            <div class="street-meta">${doors.length} doors</div>
+          </div>
+          <div class="street-right">
+            <span class="street-count" id="sc_${sid}"></span>
+            <span class="s-chev open" id="sch_${sid}">▼</span>
+          </div>
+        </div>
+        <div class="street-doors open" id="${sid}">`;
+
+      doors.forEach(d => {
+        const key = doorKey(d.n, d.s);
+        const s = state[key] || {};
+        html += `<div class="door-row">
+          <div class="door-addr">
+            <div class="door-num">${d.n}</div>
+            <div class="door-tags">${tagBadges(d.t)}</div>
+            <div class="rep-chip" id="rep_${key}">${s.rep?'👤 '+s.rep:''}</div>
+          </div>
+          <div class="door-mid">
+            <div class="door-status-wrap">
+              <select class="door-select ${selClass(s.status||'')}" id="sel_${key}" onchange="onStatus('${key}',this.value)">
+                ${buildOptions(s.status||'')}
+              </select>
+              <button class="door-note-btn${s.note?' has-note':''}" id="nbtn_${key}" onclick="toggleNote('${key}')">📝</button>
+            </div>
+          </div>
+        </div>
+        <div class="door-note-row" id="nrow_${key}">
+          <textarea class="door-note-input" id="ninp_${key}" rows="2" placeholder="Add a note...">${s.note||''}</textarea>
+          <button class="note-save-btn" onclick="saveNote('${key}')">Save</button>
+        </div>`;
+      });
+
+      html += `</div></div>`;
+    });
+    html += `</div></div>`;
+  });
+  el.innerHTML = html;
+}
+
+function toggleZone(bodyId, chevId) {
+  const b = document.getElementById(bodyId), c = document.getElementById(chevId);
+  const o = b.classList.toggle('open'); c.classList.toggle('open', o);
+}
+function toggleStreet(bodyId, chevId) {
+  const b = document.getElementById(bodyId), c = document.getElementById(chevId);
+  const o = b.classList.toggle('open'); c.classList.toggle('open', o);
+}
+function toggleNote(key) {
+  const row = document.getElementById('nrow_'+key);
+  const o = row.classList.toggle('open');
+  if(o) document.getElementById('ninp_'+key).focus();
+}
+
+async function onStatus(key, val) {
+  if(!state[key]) state[key]={};
+  state[key].status = val;
+  state[key].rep = myName||'Unknown';
+  state[key].ts = Date.now();
+  const sel = document.getElementById('sel_'+key);
+  if(sel) { sel.className = 'door-select '+selClass(val); }
+  const rc = document.getElementById('rep_'+key);
+  if(rc) rc.textContent = myName ? '👤 '+myName : '';
+  updateStats();
+  updateStreetCounts();
+  await pushState();
+  if(val==='sold') showToast('🔥 Sale logged!');
+}
+
+async function saveNote(key) {
+  const inp = document.getElementById('ninp_'+key);
+  const val = inp.value.trim();
+  if(!state[key]) state[key]={};
+  state[key].note = val;
+  state[key].rep = state[key].rep||myName||'Unknown';
+  const btn = document.getElementById('nbtn_'+key);
+  if(btn) btn.className = 'door-note-btn'+(val?' has-note':'');
+  document.getElementById('nrow_'+key).classList.remove('open');
+  await pushState();
+  showToast('Note saved');
+}
+
+function refreshDoors() {
+  const allDoors = [...DOORS_T1, ...DOORS_T2];
+  allDoors.forEach(d => {
+    const key = doorKey(d.n, d.s);
+    const s = state[key]||{};
+    const sel = document.getElementById('sel_'+key);
+    if(sel && sel.value !== (s.status||'')) {
+      sel.value = s.status||'';
+      sel.className = 'door-select '+selClass(s.status||'');
+    }
+    const ninp = document.getElementById('ninp_'+key);
+    if(ninp && ninp.value !== (s.note||'')) ninp.value = s.note||'';
+    const nbtn = document.getElementById('nbtn_'+key);
+    if(nbtn) nbtn.className = 'door-note-btn'+(s.note?' has-note':'');
+    const rc = document.getElementById('rep_'+key);
+    if(rc) rc.textContent = s.rep ? '👤 '+s.rep : '';
+  });
+  updateStreetCounts();
+}
+
+function updateStats() {
+  const doors = currentTerritory===1 ? DOORS_T1 : DOORS_T2;
+  let sold=0, follow=0, noAns=0, worked=0;
+  doors.forEach(d => {
+    const s = state[doorKey(d.n,d.s)]||{};
+    if(!s.status) return;
+    worked++;
+    if(s.status==='sold') sold++;
+    else if(s.status==='follow') follow++;
+    else if(s.status==='no'||s.status==='not-home') noAns++;
+  });
+  document.getElementById('statTotal').textContent = doors.length;
+  document.getElementById('statSold').textContent = sold;
+  document.getElementById('statFollow').textContent = follow;
+  document.getElementById('statNo').textContent = noAns;
+  document.getElementById('statWorked').textContent = worked;
+}
+
+function updateStreetCounts() {
+  const allDoors = [...DOORS_T1,...DOORS_T2];
+  const streets = [...new Set(allDoors.map(d=>d.s))];
+  streets.forEach(streetName => {
+    const sid = 'st_' + streetName.replace(/[^a-zA-Z0-9]/g,'_');
+    const el = document.getElementById('sc_'+sid);
+    if(!el) return;
+    const doors = allDoors.filter(d=>d.s===streetName);
+    let sold=0, worked=0;
+    doors.forEach(d => {
+      const s = state[doorKey(d.n,d.s)]||{};
+      if(s.status) worked++;
+      if(s.status==='sold') sold++;
+    });
+    el.textContent = worked>0 ? `${worked}/${doors.length}${sold>0?' · '+sold+' sold':''}` : '';
+  });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+async function init() {
+  if(myName) {
+    document.getElementById('repLabel').textContent = '👤 '+myName;
+    document.getElementById('nameBtn').textContent = '👤 '+myName;
+    document.getElementById('nameBtn').classList.add('active');
+  }
+  buildZones('territory1', TERRITORY1, DOORS_T1);
+  buildZones('territory2', TERRITORY2, DOORS_T2);
+  await pullState();
+  updateStats();
+  updateStreetCounts();
+  setInterval(async () => { await pullState(); updateStreetCounts(); }, 4000);
+}
+
+init();
+</script>
+</body>
+</html>
